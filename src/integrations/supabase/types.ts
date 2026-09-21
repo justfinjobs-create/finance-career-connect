@@ -14,16 +14,213 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      applications: {
+        Row: {
+          additional_information: string | null
+          archived: boolean
+          consent_confirmed: boolean
+          country: string
+          cover_letter: string | null
+          created_at: string
+          current_location: string | null
+          email: string
+          email_delivery_status: string
+          full_name: string
+          highest_qualification: string | null
+          id: string
+          job_id: string
+          linkedin_url: string | null
+          phone: string | null
+          portfolio_url: string | null
+          recruiter_notes: string | null
+          relevant_skills: string | null
+          resume_mime: string
+          resume_name: string
+          resume_path: string
+          status: Database["public"]["Enums"]["application_status"]
+          submitted_ip_hash: string | null
+          updated_at: string
+          years_experience: string | null
+        }
+        Insert: {
+          additional_information?: string | null
+          archived?: boolean
+          consent_confirmed: boolean
+          country: string
+          cover_letter?: string | null
+          created_at?: string
+          current_location?: string | null
+          email: string
+          email_delivery_status?: string
+          full_name: string
+          highest_qualification?: string | null
+          id?: string
+          job_id: string
+          linkedin_url?: string | null
+          phone?: string | null
+          portfolio_url?: string | null
+          recruiter_notes?: string | null
+          relevant_skills?: string | null
+          resume_mime: string
+          resume_name: string
+          resume_path: string
+          status?: Database["public"]["Enums"]["application_status"]
+          submitted_ip_hash?: string | null
+          updated_at?: string
+          years_experience?: string | null
+        }
+        Update: {
+          additional_information?: string | null
+          archived?: boolean
+          consent_confirmed?: boolean
+          country?: string
+          cover_letter?: string | null
+          created_at?: string
+          current_location?: string | null
+          email?: string
+          email_delivery_status?: string
+          full_name?: string
+          highest_qualification?: string | null
+          id?: string
+          job_id?: string
+          linkedin_url?: string | null
+          phone?: string | null
+          portfolio_url?: string | null
+          recruiter_notes?: string | null
+          relevant_skills?: string | null
+          resume_mime?: string
+          resume_name?: string
+          resume_path?: string
+          status?: Database["public"]["Enums"]["application_status"]
+          submitted_ip_hash?: string | null
+          updated_at?: string
+          years_experience?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "applications_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jobs: {
+        Row: {
+          application_deadline: string | null
+          category: string
+          country: string
+          created_at: string
+          description: string
+          employer_label: string
+          employment_type: string
+          experience_level: string
+          id: string
+          is_published: boolean
+          is_sample: boolean
+          posted_at: string
+          preferred_qualifications: string[]
+          requirements: string[]
+          responsibilities: string[]
+          salary_range: string | null
+          slug: string
+          summary: string
+          title: string
+          updated_at: string
+          work_arrangement: string
+        }
+        Insert: {
+          application_deadline?: string | null
+          category: string
+          country: string
+          created_at?: string
+          description: string
+          employer_label: string
+          employment_type: string
+          experience_level: string
+          id?: string
+          is_published?: boolean
+          is_sample?: boolean
+          posted_at?: string
+          preferred_qualifications?: string[]
+          requirements?: string[]
+          responsibilities?: string[]
+          salary_range?: string | null
+          slug: string
+          summary: string
+          title: string
+          updated_at?: string
+          work_arrangement: string
+        }
+        Update: {
+          application_deadline?: string | null
+          category?: string
+          country?: string
+          created_at?: string
+          description?: string
+          employer_label?: string
+          employment_type?: string
+          experience_level?: string
+          id?: string
+          is_published?: boolean
+          is_sample?: boolean
+          posted_at?: string
+          preferred_qualifications?: string[]
+          requirements?: string[]
+          responsibilities?: string[]
+          salary_range?: string | null
+          slug?: string
+          summary?: string
+          title?: string
+          updated_at?: string
+          work_arrangement?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "recruiter"
+      application_status:
+        | "new"
+        | "reviewing"
+        | "shortlisted"
+        | "interview"
+        | "declined"
+        | "hired"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +347,16 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "recruiter"],
+      application_status: [
+        "new",
+        "reviewing",
+        "shortlisted",
+        "interview",
+        "declined",
+        "hired",
+      ],
+    },
   },
 } as const
