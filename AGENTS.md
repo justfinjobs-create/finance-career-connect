@@ -8,3 +8,6 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Candidate CVs upload directly to the private `applicant-resumes` bucket through signed upload URLs; application server functions receive only the storage path to stay within production request-size limits.
+- Brand images used by deployed pages are bundled under `src/assets` rather than Lovable-only asset URLs so external hosts such as Vercel render them reliably.
