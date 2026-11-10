@@ -14,6 +14,77 @@ const clean=(v?:string)=>v?.replace(/[\u0000-\u001f\u007f]/g," ").trim()||null;
 const safeFileName=(value:string)=>value.replace(/[^a-zA-Z0-9._-]/g,"_");
 const b64url=(s:string)=>Buffer.from(s,"utf8").toString("base64").replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
 
+type ApplicationEmail = {
+  subject: string;
+  body: string;
+  replyTo: string;
+  attachment: { filename: string; mime: string; content: Buffer };
+};
+
+// Prefers Resend (provisioned via the Vercel Marketplace integration) when RESEND_API_KEY is set;
+// otherwise falls back to the Lovable Gmail connector so the Lovable preview keeps working.
+async function sendApplicationEmail(email: ApplicationEmail) {
+  const to = process.env["RECRUITER_EMAIL"];
+  if (!to) throw new Error("Email configuration missing: RECRUITER_EMAIL");
+  if (process.env["RESEND_API_KEY"]) return sendViaResend(to, process.env["RESEND_API_KEY"], email);
+  return sendViaLovableGmail(to, email);
+}
+
+async function sendViaResend(to: string, apiKey: string, email: ApplicationEmail) {
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: process.env["EMAIL_FROM"] || "JUSTFIN Applications <onboarding@resend.dev>",
+      to: [to],
+      reply_to: email.replyTo,
+      subject: email.subject,
+      text: email.body,
+      attachments: [
+        {
+          filename: email.attachment.filename,
+          content: email.attachment.content.toString("base64"),
+          content_type: email.attachment.mime,
+        },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`Resend ${res.status}: ${await res.text()}`);
+}
+
+async function sendViaLovableGmail(to: string, email: ApplicationEmail) {
+  const api = process.env["LOVABLE_API_KEY"];
+  const key = process.env["GOOGLE_MAIL_API_KEY"];
+  if (!api || !key) throw new Error("Email configuration missing: set RESEND_API_KEY, or LOVABLE_API_KEY and GOOGLE_MAIL_API_KEY");
+  const { filename, mime: attachmentMime, content } = email.attachment;
+  const boundary = `justfin_${randomUUID()}`;
+  const mime = [
+    `To: ${to}`,
+    `Reply-To: ${email.replyTo}`,
+    `Subject: =?UTF-8?B?${Buffer.from(email.subject).toString("base64")}?=`,
+    `MIME-Version: 1.0`,
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    ``,
+    `--${boundary}`,
+    `Content-Type: text/plain; charset="UTF-8"`,
+    ``,
+    email.body,
+    `--${boundary}`,
+    `Content-Type: ${attachmentMime}; name="${filename}"`,
+    `Content-Disposition: attachment; filename="${filename}"`,
+    `Content-Transfer-Encoding: base64`,
+    ``,
+    content.toString("base64").match(/.{1,76}/g)?.join("\r\n") || "",
+    `--${boundary}--`,
+  ].join("\r\n");
+  const res = await fetch("https://connector-gateway.lovable.dev/google_mail/gmail/v1/users/me/messages/send", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${api}`, "X-Connection-Api-Key": key, "Content-Type": "application/json" },
+    body: JSON.stringify({ raw: b64url(mime) }),
+  });
+  if (!res.ok) throw new Error(`Gmail ${res.status}: ${await res.text()}`);
+}
+
 export const createResumeUpload=createServerFn({method:"POST"}).inputValidator((v)=>resumeSchema.parse(v)).handler(async({data})=>{
  const safeName=safeFileName(data.resumeName); const path=`${data.jobId}/${randomUUID()}-${safeName}`;
  const {supabaseAdmin}=await import("@/integrations/supabase/client.server");
@@ -35,7 +106,17 @@ export const submitApplication=createServerFn({method:"POST"}).inputValidator((v
  const safeName=safeFileName(data.resumeName);
  const row={job_id:data.jobId,full_name:data.fullName.trim(),email:data.email.toLowerCase(),phone:clean(data.phone),country:data.country.trim(),current_location:clean(data.currentLocation),linkedin_url:clean(data.linkedinUrl),portfolio_url:clean(data.portfolioUrl),years_experience:clean(data.yearsExperience),highest_qualification:clean(data.highestQualification),relevant_skills:clean(data.relevantSkills),cover_letter:clean(data.coverLetter),additional_information:clean(data.additionalInformation),resume_path:data.resumePath,resume_name:safeName,resume_mime:data.resumeMime,consent_confirmed:true,submitted_ip_hash:ipHash};
  const {data:created,error}=await supabaseAdmin.from("applications").insert(row).select("id").single(); if(error){await removeResume(); console.error("Application save failed",error); throw new Error("Application could not be saved. Please try again.");}
- let delivery="failed"; try { const to=process.env['RECRUITER_EMAIL']; const api=process.env['LOVABLE_API_KEY']; const key=process.env['GOOGLE_MAIL_API_KEY']; if(!to||!api||!key) throw new Error("Email configuration missing"); const boundary=`justfin_${randomUUID()}`; const body=[`Applicant name: ${data.fullName}`,`Email: ${data.email}`,`Phone: ${data.phone||"Not provided"}`,`Country: ${data.country}`,`Location: ${data.currentLocation||"Not provided"}`,`LinkedIn: ${data.linkedinUrl||"Not provided"}`,`Portfolio: ${data.portfolioUrl||"Not provided"}`,`Experience: ${data.yearsExperience||"Not provided"}`,`Qualification: ${data.highestQualification||"Not provided"}`,`Skills: ${data.relevantSkills||"Not provided"}`,`Cover Letter: ${data.coverLetter||"Not provided"}`,`Job Applied For: ${data.jobTitle}`].join("\r\n"); const subject=`New JUSTFIN Application — ${data.jobTitle} — ${data.fullName}`; const mime=[`To: ${to}`,`Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,`MIME-Version: 1.0`,`Content-Type: multipart/mixed; boundary="${boundary}"`,``,`--${boundary}`,`Content-Type: text/plain; charset="UTF-8"`,``,body,`--${boundary}`,`Content-Type: ${data.resumeMime}; name="${safeName}"`,`Content-Disposition: attachment; filename="${safeName}"`,`Content-Transfer-Encoding: base64`,``,file.toString("base64").match(/.{1,76}/g)?.join("\r\n")||"",`--${boundary}--`].join("\r\n"); const res=await fetch("https://connector-gateway.lovable.dev/google_mail/gmail/v1/users/me/messages/send",{method:"POST",headers:{Authorization:`Bearer ${api}`,"X-Connection-Api-Key":key,"Content-Type":"application/json"},body:JSON.stringify({raw:b64url(mime)})}); if(!res.ok) throw new Error(`Gmail ${res.status}: ${await res.text()}`); delivery="sent"; } catch(e){console.error("Application email delivery failed",e)}
+ let delivery="failed";
+ try {
+  const body=[`Applicant name: ${data.fullName}`,`Email: ${data.email}`,`Phone: ${data.phone||"Not provided"}`,`Country: ${data.country}`,`Location: ${data.currentLocation||"Not provided"}`,`LinkedIn: ${data.linkedinUrl||"Not provided"}`,`Portfolio: ${data.portfolioUrl||"Not provided"}`,`Experience: ${data.yearsExperience||"Not provided"}`,`Qualification: ${data.highestQualification||"Not provided"}`,`Skills: ${data.relevantSkills||"Not provided"}`,`Cover Letter: ${data.coverLetter||"Not provided"}`,`Job Applied For: ${data.jobTitle}`].join("\r\n");
+  await sendApplicationEmail({
+   subject:`New JUSTFIN Application — ${data.jobTitle} — ${data.fullName}`,
+   body,
+   replyTo:data.email,
+   attachment:{filename:safeName,mime:data.resumeMime,content:file},
+  });
+  delivery="sent";
+ } catch(e){console.error("Application email delivery failed",e)}
  await supabaseAdmin.from("applications").update({email_delivery_status:delivery}).eq("id",created.id); return {ok:true,id:created.id,delivery};
 });
 export const getRecruiterApplications=createServerFn({method:"GET"}).middleware([requireSupabaseAuth]).handler(async({context})=>{ const email=String(context.claims.email||"").toLowerCase(); const recruiter=process.env['RECRUITER_EMAIL']?.toLowerCase(); if(email===recruiter){const {supabaseAdmin}=await import("@/integrations/supabase/client.server"); await supabaseAdmin.from("user_roles").upsert({user_id:context.userId,role:"admin"},{onConflict:"user_id,role"});} const {data:role}=await context.supabase.from("user_roles").select("role").eq("user_id",context.userId).maybeSingle(); if(!role) throw new Error("Recruiter access required"); const {data,error}=await context.supabase.from("applications").select("*, jobs(title, employer_label)").order("created_at",{ascending:false}); if(error) throw error; return data; });
