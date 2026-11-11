@@ -89,7 +89,7 @@ export const createResumeUpload=createServerFn({method:"POST"}).inputValidator((
  const safeName=safeFileName(data.resumeName); const path=`${data.jobId}/${randomUUID()}-${safeName}`;
  const {supabaseAdmin}=await import("@/integrations/supabase/client.server");
  const {data:signed,error}=await supabaseAdmin.storage.from("applicant-resumes").createSignedUploadUrl(path);
- if(error) throw new Error("A secure CV upload could not be started. Please try again.");
+ if(error){console.error("Signed CV upload URL failed",{bucket:"applicant-resumes",path,error});throw new Error("A secure CV upload could not be started. Please try again.");}
  return {path,token:signed.token};
 });
 
